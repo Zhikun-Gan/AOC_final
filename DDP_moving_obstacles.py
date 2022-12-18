@@ -9,7 +9,7 @@ import math
 
 class DDP:
 
-  def __init__(self,t=1,N=40):
+  def __init__(self,t=10,N=40):
 
     # time-step and # of segments
     self.tf = t
@@ -22,30 +22,27 @@ class DDP:
     self.m = 2
 
     # cost function specification
-    self.Q = np.diag([1, 1, 0, 0, 0])
-    self.R = np.diag([0.1, 0.1])
-    self.Pf = np.diag([100, 100, 0, 0, 0])
+    self.Q = np.diag([0, 0, 0, 0, 0])
+    self.R = np.diag([1, 1])
+    self.Pf = np.diag([100, 100, 1, 1, 1])
 
     self.mu = 1
     # set obstacles and penalty coefficient
     self.os_p = [[-2.5, 2], [-1, 0]]
     self.os_r = [1, 0]
-    # self.os_p_move = []
-    # self.os_p_move.append(np.linspace([0, 3], [1, -1.3], self.N))
-    # self.os_p_move.append(np.linspace([2, 5], [-1, -2], self.N))
     self.os_p_move = np.stack((np.linspace([0, 3], [1, 0], self.N), np.linspace([2, 5], [-1, -2], self.N)), axis=0)
-    self.os_r_move = [2, 2]
+    self.os_r_move = [0.25, 1.5]
     self.ko_x = 5
     self.ko_u = 1
 
     # initial state
-    self.x0 = np.array([-3, -1, 1.2, 0, 0])
+    self.x0 = np.array([-3, -2, 1.2, 0, 0])
 
     # control bound
     self.u_bd = np.array([50, 30])  # absolute control boundary
 
     # goal position
-    self.goal = np.array([1, 1, 0, 0, 0])
+    self.goal = np.array([0, 0, 0, 0, 0])
 
   def f(self, k, x, u):
 
@@ -128,7 +125,7 @@ class DDP:
   def trajectory(self, tf, update_rate,control_rate,x0, os_p, os_r, os_p_m, os_r_m):
 
     # self.N = tf//self.t_seg*self.N_seg
-    self.N = int(tf*control_rate)
+    self.N = round(tf*control_rate)
     self.tf = tf
     self.x0 = x0
     self.os_p = os_p
@@ -155,7 +152,8 @@ class DDP:
       # axs[0].plot(xs[0,:], xs[1,:], '-g')
       self.ko_x = self.ko_x * 1.5
       self.ko_u = self.ko_u * 1.1
-    return xs, self.N
+    return xs, us
+
 if __name__ == '__main__':
 
   prob = DDP()
@@ -197,14 +195,15 @@ if __name__ == '__main__':
   plt.show()
 
   fig, axs = plt.subplots()
-  # plt.axis([-10, 10, -10, 10])
-  axs.axis('equal')
+
   for j in range(len(prob.os_r)):
     circle = plt.Circle(prob.os_p[j], prob.os_r[j], color='r', linewidth=2,
                         fill=False)
     axs.add_patch(circle)
 
   for k in range(prob.N):
+    axs.axis('equal')
+    plt.axis([-8, 8, -8, 8])
     plt.scatter(xs[0, k], xs[1, k])
     for j in range(len(prob.os_r_move)):
       circle = plt.Circle(prob.os_p_move[j][k], prob.os_r_move[j], color='r', linewidth=2,

@@ -5,7 +5,7 @@ from trajopt_sqp import trajopt_sqp
 # Optimal control example of a simple car model with disk obstacles
 
 
-class Problem:
+class collocation:
 
   def __init__(self):
 
@@ -16,19 +16,19 @@ class Problem:
 
     # cost function parameters
     self.Q = np.diag([0, 0, 0, 0, 0])
-    self.R = np.diag([1, 5])
+    self.R = np.diag([1, 1])
     self.Qf = np.diag([5, 5, 1, 1, 1])
 
     # initial state
-    self.x0 = np.array([-5, -2, -1.2, 0, 0])
+    # self.x0 = np.array([-5, -2, -1.2, 0, 0])
+    self.x0 = np.array([-3, -2, 1.2, 0, 0])
 
     # add disk obstacles
-    self.os_p = [[0.5,0.5],[-0.25,-0.25]]
-    self.os_r = [1,2]
-    self.os_p_move = []
-    self.os_p_move.append(np.linspace([0,3],[1,0],self.N))
-    self.os_p_move.append(np.linspace([2,5],[-1,-2],self.N))
-    self.os_r_move = [2,2]
+    self.os_p = [[-2.5, 2], [-1, 0]]
+    self.os_r = [1, 0]
+    self.os_p_move = np.stack((np.linspace([0, 3], [1, 0], self.N), np.linspace([2, 5], [-1, -2], self.N)), axis=0)
+    self.os_r_move = [0.25,2]
+
 
   def f(self, k, x, u):
     # car dynamics and jacobians
@@ -82,23 +82,14 @@ class Problem:
     numMov=len(self.os_r_move)
     constraints=np.zeros(numCon+numMov)
     for i in range(numCon):
-      constraints[i]=self.os_r[i]**2-((x[0]-self.os_p[i][0])**2+(x[1]-self.os_p[i][1])**2)
+      # constraints[i]=self.os_r[i]**2-((x[0]-self.os_p[i][0])**2+(x[1]-self.os_p[i][1])**2)
+      g = x[:2] - self.os_p[i]
+      constraints[i] = self.os_r[i] - np.linalg.norm(g)
     for i in range(numMov):
-      constraints[numCon+i] = self.os_r_move[i] ** 2 - ((x[0] - self.os_p_move[i][k,0]) ** 2 + (x[1] - self.os_p_move[i][k,1]) ** 2)
+      g = x[:2] - self.os_p_move[i, k, 0:2]
+      # constraints[numCon+i] = self.os_r_move[i] ** 2 - ((x[0] - self.os_p_move[i][k,0]) ** 2 + (x[1] - self.os_p_move[i][k,1]) ** 2)
+      constraints[numCon+i] = self.os_r_move[i]-np.linalg.norm(g)
     return constraints
-
-  # def con(self, k, x, u):
-  #   numCon=len(self.os_r)
-  #   constraints=np.zeros(numCon)
-  #   x1,_,_=self.f(k,x,u)
-  #   D=x1[:2]-x[:2]
-  #   l=np.linalg.norm(D)
-  #   for i in range(numCon):
-  #     A=self.os_p[i]-x[:2]
-  #     temp=min(A @ D / l, l)
-  #     f=x[:2]+max(min(A@D/l,l),0)/l*D
-  #     constraints[i]=self.os_r[i]-np.linalg.norm(f-self.os_p[i])
-  #   return constraints
 
   def conf(self, k, x):
     numCon = len(self.os_r)
@@ -141,10 +132,31 @@ class Problem:
     # currently waiting have been processed
     fig.canvas.flush_events()
 
+  def trajectory(self,  tf, update_rate,control_rate,x0, os_p, os_r, os_p_m, os_r_m,xs_ini = 0, us_ini = 0):
+    self.N = round(tf * control_rate)
+    self.tf = tf
+    self.x0 = x0
+    self.os_p = os_p
+    self.os_p_move = os_p_m
+    self.os_r = os_r
+    self.os_r_move = os_r_m
+    # initial control sequence
+
+    us = np.concatenate((np.tile([[0.1], [0.05]], (1, self.N // 2)),
+                         np.tile([[-0.1], [-0.05]], (1, self.N // 2))), axis=1) / 2
+    if (np.shape(us)[1] != self.N):
+      us = np.concatenate((us, np.tile([[-0.1], [-0.05]], (1, 1)) / 2), axis=1)
+
+    if np.linalg.norm(xs_ini) != 0 and np.linalg.norm(us_ini) != 0:
+      xs, us, cost = trajopt_sqp(xs_ini, us_ini, self)
+    else:
+      xs = self.traj(us)
+      xs, us, cost = trajopt_sqp(xs, us, self)
+    return xs
 
 if __name__ == '__main__':
 
-  prob = Problem()
+  prob = collocation()
 
   # initial control sequence
   us = np.concatenate((np.ones((2, prob.N // 2)) * 0.02,
@@ -203,12 +215,15 @@ if __name__ == '__main__':
     axs.add_patch(circle)
 
   for k in range(prob.N):
+    axs.axis('equal')
+    plt.axis([-8, 8, -8, 8])
     plt.scatter(xs[0, k],xs[1,k])
     for j in range(len(prob.os_r_move)):
       circle = plt.Circle(prob.os_p_move[j][k], prob.os_r_move[j], color='r', linewidth=2,
                           fill=False)
       axs.add_patch(circle)
     plt.pause(0.5)
-    for j in range(len(prob.os_r_move)):
-      axs.patches.pop()
+    if k != prob.N - 1:
+      for j in range(len(prob.os_r_move)):
+        axs.patches.pop()
   plt.show()

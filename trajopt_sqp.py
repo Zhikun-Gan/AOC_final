@@ -123,10 +123,10 @@ def trajopt_sqp(xs, us, S):
 
   if (use_ineq_constraints):
     res = minimize(objfun_, z, jac=True, constraints=(c_eq, c_ineq),
-                   options=options, callback=plot_traj_)
+                   options=options)  # , callback=plot_traj_
   else:
     res = minimize(objfun_, z, jac=True, constraints=(c_eq),
-                   options=options, callback=plot_traj_)
+                   options=options)
 
   z = res.x
   cost = res.fun
